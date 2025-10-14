@@ -73,8 +73,8 @@ def settings():
             st.session_state['hdb_port'] = config["HDB"]["hdb_port"] 
             st.session_state['hdb_user'] = config["HDB"]["hdb_user"]
             st.session_state['hdb_password'] = config["HDB"]["hdb_password"]
-            st.session_state['secret'] = config["SETTINGS"]["secrets_file"]
-            st.session_state['token'] = config["SETTINGS"]["token_file"]
+            st.session_state['secret'] = rf"{config["SETTINGS"]["secrets_file"]}"
+            st.session_state['token'] = rf"{config["SETTINGS"]["token_file"]}"
             
     
             processed = True
@@ -123,7 +123,7 @@ def oauth_process():
             st.rerun()
 
 def get_initial_token(path_of_secret_file):
-
+   
     with open(rf"{path_of_secret_file}", "r", encoding="utf-8") as f:    
         data = f.read()
 
