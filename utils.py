@@ -24,6 +24,7 @@ def initializeGetOAuthSession(token_file, secrets_file):
         token = json.load(f)
     else:
         token = st.session_state.token
+        print(token)
 
     try:
         
