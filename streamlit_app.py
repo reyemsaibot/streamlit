@@ -123,8 +123,11 @@ def oauth_process():
             st.rerun()
 
 def get_initial_token(path_of_secret_file):
-    f = open(path_of_secret_file, "r", encoding="utf-8")
-    secrets = json.load(f)
+
+    with open(path_of_secret_file, "r", encoding="utf-8") as f:    
+        data = f.read()
+
+    secrets = json.load(data)
     client_id_encode = urllib.parse.quote(secrets['client_id'])
     code_url = secrets['authorization_url'] + '?response_type=code&client_id=' + client_id_encode
     return code_url
