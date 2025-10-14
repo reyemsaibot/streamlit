@@ -124,7 +124,7 @@ def oauth_process():
 
 def get_initial_token(path_of_secret_file):
 
-    with open(path_of_secret_file, "r", encoding="utf-8") as f:    
+    with open(rf"{path_of_secret_file}", "r", encoding="utf-8") as f:    
         data = f.read()
 
     secrets = json.load(data)
