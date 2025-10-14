@@ -1,4 +1,4 @@
-from Streamlit1 import object_dependencies, exposed_views, database_tables, objects_in_taskchain, userlist, taskchain_start, notifcations, delete_objects, view_overview, unused_objects, taskchainlogs, shares_per_space, find_column, orphaned_objects, system_monitor, memory_usage
+from Streamlit1 import object_dependencies, exposed_views, database_tables, objects_in_taskchain, userlist, taskchain_start, notifcations, delete_objects, view_overview, unused_objects, taskchainlogs, shares_per_space, find_column, orphaned_objects, system_monitor, memory_usage, business_name
 import streamlit as st
 import json
 import pandas as pd
@@ -37,7 +37,8 @@ def settings():
         "token_received",
         "display",
         "df",
-        "count"
+        "count",
+        "separate"
     ]:
         st.session_state.setdefault(key, "")
 
@@ -65,6 +66,8 @@ def settings():
         st.write("### Upload Configuration File")
         uploaded_file = st.file_uploader("Choose a file", type="json")
         
+        separated = st.checkbox("Separated Upload of Secret & Token file")
+
         if uploaded_file is not None:       
            
             config = json.load(uploaded_file)
@@ -73,10 +76,22 @@ def settings():
             st.session_state['hdb_port'] = config["HDB"]["hdb_port"] 
             st.session_state['hdb_user'] = config["HDB"]["hdb_user"]
             st.session_state['hdb_password'] = config["HDB"]["hdb_password"]
-            st.session_state['secret'] = rf"{config["SETTINGS"]["secrets_file"]}"
-            st.session_state['token'] = rf"{config["SETTINGS"]["token_file"]}"
-            
-    
+
+            if separated == False:
+                st.session_state['secret'] = config["SETTINGS"]["secrets_file"]
+                st.session_state['token'] = config["SETTINGS"]["token_file"]
+            else: 
+                secret = st.file_uploader("Choose a secret file", type="json")
+                token = st.file_uploader("Choose a token file", type="json")
+
+                st.session_state.separate = True
+
+                if secret is not None:
+                     st.session_state['secret'] = secret
+                     print(st.session_state['secret'])
+                if token is not None:
+                     st.session_state['token'] = token
+
             processed = True
     placeholder = st.empty()
     if processed:
@@ -107,7 +122,7 @@ def settings():
             else:
                 st.error("Failed to retrieve token. Please try again.", icon="❌")
         
-@st.dialog("Cast your vote")
+@st.dialog("Logon with OAuth")
 def oauth_process():
    
     code_url = get_initial_token(st.session_state.secret)   
@@ -123,11 +138,13 @@ def oauth_process():
             st.rerun()
 
 def get_initial_token(path_of_secret_file):
-   
-    with open(rf"{path_of_secret_file}", "r", encoding="utf-8") as f:    
-        data = f.read()
+    if st.session_state.separate == False:
+        f = open(path_of_secret_file)
+    else:
+        f = st.session_state.secret
 
-    secrets = json.load(data)
+    secrets = json.load(f)
+
     client_id_encode = urllib.parse.quote(secrets['client_id'])
     code_url = secrets['authorization_url'] + '?response_type=code&client_id=' + client_id_encode
     return code_url
@@ -153,8 +170,16 @@ def access_request(path_of_secret_file, token_file, code):
     token['expire'] = expire.strftime("%Y-%m-%d %H:%M:%S")
 
     # Write token to file
-    with open(token_file, 'w') as f:
-        json.dump(token, f)
+    if st.session_state.separate == False:
+        with open(token_file, 'w') as f:
+            json.dump(token, f)
+    else:
+        st.download_button(
+                    label="Download Token File",
+                    data=token,
+                    file_name="token.json",
+                    mime="application/json")
+
     return OAuth_AccessRequest.json()['access_token']
 
 def check_session_state():
@@ -525,6 +550,21 @@ def column_in_object_gui():
             st.dataframe(data=st.session_state.df, hide_index=True)   
             st.session_state.display = False
 
+def business_names_gui():
+    if check_session_state():
+        return
+     
+    st.write("# Get Business and Technical Name 🥳")
+             
+    st.markdown(""" 
+                Obtain the business and technical names of the columns of one object.""")
+
+    with st.container(width=2000, border=True):   
+        st.session_state.dsp_space = selectbox_space()
+        artifact = st.text_input(label='Enter technical Object Name', value='', help='Enter the column of the object', label_visibility="visible")
+        if st.button("Get Business Name"):
+            df = business_name.get_business_and_technical_name(artifact)
+            st.dataframe(data=df, hide_index=True)  
 
 pages = {
     "Home": [
@@ -542,6 +582,7 @@ pages = {
         st.Page(taskchain_start_gui, title="Run TaskChain", icon="▶️"),
         st.Page(column_in_object_gui, title="Column in Object", icon="🤞"),
         st.Page(dac_per_user_gui, title="DataAccessControl per User"),
+        st.Page(business_names_gui, title="Get Business/Technical Name")
     ],
     
     "HouseKeeping": [

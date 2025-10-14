@@ -4,6 +4,7 @@ from json.decoder import JSONDecodeError
 from datetime import datetime, timedelta
 from hdbcli import dbapi  
 import requests
+import streamlit as st
 
 def get_url(dsp_url, url_name):
 
@@ -17,6 +18,13 @@ def initializeGetOAuthSession(token_file, secrets_file):
     token = ''
     expire = datetime(1970, 1, 1)
     # Get token if available
+
+    if st.session_state.separate == False:
+        f = open(token_file)
+    else:
+        f = st.session_state.token
+
+
     f = open(token_file)
 
     try:
