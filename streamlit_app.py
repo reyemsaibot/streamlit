@@ -115,12 +115,12 @@ def settings():
         st.write("### OAuth Connection")
 
         if st.button('Start OAuth', icon="🔑"):
-            token_file = oauth_process(secret_loaded)
+            oauth_process(secret_loaded)
             if st.session_state.token_received != '':
                 st.success("Token received and saved successfully!", icon="🎉")
                 st.download_button(
-                    label="📥 Create new configuration file",
-                    data=token_file,
+                    label="Download token file",
+                    data=st.session_state.token_file,
                     file_name="token.json",
                     mime="application/json")
             else:
@@ -138,10 +138,9 @@ def oauth_process(secret_loaded: str):
 
     if submitted:
         with st.spinner("Wait for it...", show_time=True):
-            st.session_state.token_received,token_file = access_request(st.session_state.secret,st.session_state.token,code, secret_loaded) 
+            st.session_state.token_received = access_request(st.session_state.secret,st.session_state.token,code, secret_loaded) 
         
             st.rerun()
-            return token_file
 
 def get_initial_token(path_of_secret_file, secret_loaded: str):
     if st.session_state.separate == False:
@@ -186,10 +185,10 @@ def access_request(path_of_secret_file, token_file, code, secret_loaded: str):
         with open(token_file, 'w') as f:
             json.dump(token, f)
     else:
-        token_file = token
+        st.session_state.token_file = token
                     
 
-    return OAuth_AccessRequest.json()['access_token'], token_file
+    return OAuth_AccessRequest.json()['access_token']
 
 def check_session_state():
     if ('hdb_address' or 'hdb_user' or 'hdb_password' or 'secret' or 'token') not in st.session_state:
