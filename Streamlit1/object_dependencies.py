@@ -1,6 +1,6 @@
-import streamlit_app as app
 import pandas as pd
 import json
+import utils
 
 def get_objects(object):
     query = f'''
@@ -9,7 +9,7 @@ def get_objects(object):
         WHERE BASE_OBJECT_NAME = '{object}'
         AND DEPENDENT_OBJECT_NAME not like '§%';
     '''
-    return app.database_connection(query)
+    return utils.database_connection(query)
 
 def get_description(space, list_of_objects):
     query = f'''
@@ -25,7 +25,7 @@ def get_description(space, list_of_objects):
         ON A.ARTIFACT_NAME = B.ARTIFACT_NAME
         AND A.ARTIFACT_VERSION = B.MAX_ARTIFACT_VERSION;
     '''
-    return app.database_connection(query)
+    return utils.database_connection(query)
 
 
 def get_object_dependencies(object):

@@ -10,6 +10,7 @@ def start_taskchain(spaceID, taskChain):
     url = utils.get_url(st.session_state.dsp_host, 'run_task_chain').format(**{"spaceID": spaceID, **{"taskChain": taskChain}})
     response = requests.post(url, headers=header)
 
-    print(f"Log ID lautet: {response.json()['logId']}")
+    if response.status_code == 200:
+        return response.json()['logId']
 
 

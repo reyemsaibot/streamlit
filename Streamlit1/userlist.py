@@ -31,9 +31,13 @@ def get_user_overview():
 
         user_list.append((username,first_name,last_name,email,days_visited,last_login.strftime("%d.%m.%Y"), ago.days))
         days_visited = 0
+        
+        last_login = datetime.fromtimestamp(int(0)).date()
+        ago = last_login -  datetime.fromtimestamp(int(0)).date()
         first_name = ''
         last_name = ''
         email = ''
 
-    return pd.DataFrame(user_list, columns=['User Name', 'First Name', 'Last Name', 'E-Mail', 'Days Visited', 'Last Login', 'Days ago'])
-  
+    df = pd.DataFrame(user_list, columns=['User Name', 'First Name', 'Last Name', 'E-Mail', 'Days Visited', 'Last Login', 'Days ago'])
+   # Change column B and C's values to integers
+    return df.astype({'Days Visited': int, 'Days ago': int})

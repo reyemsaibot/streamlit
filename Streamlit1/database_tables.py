@@ -8,7 +8,6 @@ def get_database_tables():
     database_tables = []
 
     url = utils.get_url(st.session_state.dsp_host, 'list_of_spaces')
-    print(url)
     response = requests.get(url,headers=header)
     space_list = response.json()
 
@@ -26,5 +25,10 @@ def get_database_tables():
         except KeyError:
             continue
 
-    return pd.DataFrame(database_tables, columns=['Space', 'Table Name', 'Used Disk', 'Used Memory', 'Records'])
+    df = pd.DataFrame(database_tables, columns=['Space', 'Table Name', 'Used Disk', 'Used Memory', 'Records'])
+    # Change column B and C's values to integers
+    df = df.astype({'Used Disk': float, 'Used Memory': float, 'Records': int})
+    df['Records'] = df['Records'].apply(lambda x: f"{x:,}".replace(",", "."))
+    
 
+    return df

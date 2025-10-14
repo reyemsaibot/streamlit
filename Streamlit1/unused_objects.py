@@ -19,8 +19,13 @@ def get_unused_objects():
 
     objects = remote_tables + views + local_tables  + dataflows
     url = utils.get_url(st.session_state.dsp_host, "all_design_objects").format(**{"spaceID": st.session_state.dsp_space})
-    all_design_objects = requests.get(url, headers=header).json()
-
+    # check if no authorization for a space is given
+    try:
+        all_design_objects = requests.get(url, headers=header).json()
+    except requests.exceptions.JSONDecodeError:
+        st.warning("No authorization for this space", icon="ℹ️")
+        return pd.DataFrame()
+    
     design_objects_dict = {obj['qualified_name']: obj['id'] for obj in all_design_objects['results']}
 
     # Iteriere über remote_tables und prüfe direkt, ob der Name im Dictionary existiert

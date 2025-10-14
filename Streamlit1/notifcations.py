@@ -4,7 +4,18 @@ import utils
 import pandas as pd
 
 
-def get_notifications():
+def get_notifications(option):
+
+    notfication_type = []
+
+    if option == 'Successful':
+        notfication_type.append(8)
+    elif option == 'Error':
+        notfication_type.append(0)
+    else:
+        notfication_type.append(0)
+        notfication_type.append(8)
+
     list_of_notifications = []
     header = utils.initializeGetOAuthSession(st.session_state.token, st.session_state.secret)
     url = utils.get_url(st.session_state.dsp_host, 'notification')
@@ -13,7 +24,11 @@ def get_notifications():
     for notification in notifications:
         type = notification['type']
         # Error or other impact (8 = successful)
-        if type == 0:
+
+
+
+
+        if type in notfication_type:
             day = notification['timestamp'][0:10] # Position 0 - 10
             deploy_time = notification['timestamp'][11:19] # Position 11 - 19
             list_of_notifications.append((notification['title'], day, deploy_time))

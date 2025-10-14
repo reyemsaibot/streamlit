@@ -1,12 +1,13 @@
-from Streamlit1 import object_dependencies, exposed_views, database_tables, objects_in_taskchain, userlist, taskchain_start, notifcations, delete_objects, view_overview, unused_objects
+from Streamlit1 import object_dependencies, exposed_views, database_tables, objects_in_taskchain, userlist, taskchain_start, notifcations, delete_objects, view_overview, unused_objects, taskchainlogs, shares_per_space, find_column, orphaned_objects, system_monitor, memory_usage
 import streamlit as st
 import json
 import pandas as pd
-from hdbcli import dbapi  
+from df_global_search import DataFrameSearch
 from requests_oauthlib import OAuth2Session
 import urllib.parse
 import requests
 import datetime
+import utils
 
 st.set_page_config(
     page_title="Datasphere Tools",
@@ -34,6 +35,9 @@ def settings():
         "secret",
         "oauth",
         "token_received",
+        "display",
+        "df",
+        "count"
     ]:
         st.session_state.setdefault(key, "")
 
@@ -43,11 +47,21 @@ def settings():
     with st.container(border=True):
 
         st.write('### New Configuration File')
-        if st.button('Create new empty configuration', icon="🆕"):
-            st.write("TODO")
-
-
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.download_button(
+                    label="📥 Create new configuration file",
+                    data=utils.create_config_template(),
+                    file_name="config.json",
+                    mime="application/json")
+        with col2:
+            st.download_button(                
+                    label="📥 Create new secret file",
+                    data=utils.create_secret_template(),
+                    file_name="secret.json",
+                    mime="application/json")
        
+    with st.container(border=True):
         st.write("### Upload Configuration File")
         uploaded_file = st.file_uploader("Choose a file", type="json")
         
@@ -96,7 +110,7 @@ def settings():
 @st.dialog("Cast your vote")
 def oauth_process():
    
-    code_url = get_initial_token(st.session_state.secret, st.session_state.token)   
+    code_url = get_initial_token(st.session_state.secret)   
     st.page_link(code_url, label=code_url, icon="🌎")
     st.info("Please enter the code you received after the OAuth process below.", icon="ℹ️")
     with st.form("my_form",clear_on_submit=False, enter_to_submit=True, border=True, width="stretch", height="content"):
@@ -108,8 +122,8 @@ def oauth_process():
             st.session_state.token_received = access_request(st.session_state.secret,st.session_state.token,code) 
             st.rerun()
 
-def get_initial_token(path_of_secret_file, token_file):
-    f = open(path_of_secret_file)
+def get_initial_token(path_of_secret_file):
+    f = open(path_of_secret_file, "r", encoding="utf-8")
     secrets = json.load(f)
     client_id_encode = urllib.parse.quote(secrets['client_id'])
     code_url = secrets['authorization_url'] + '?response_type=code&client_id=' + client_id_encode
@@ -140,55 +154,49 @@ def access_request(path_of_secret_file, token_file, code):
         json.dump(token, f)
     return OAuth_AccessRequest.json()['access_token']
 
-
 def check_session_state():
     if ('hdb_address' or 'hdb_user' or 'hdb_password' or 'secret' or 'token') not in st.session_state:
         st.warning("Please go to the Settings page and upload a configuration file first.", icon="⚠️")
         return True
 
+    #if 
+
+def selectbox_space():
+    return st.selectbox(label='Select Space', options=[row for row in get_space_names()], help='Select the DSP Space you want to analyze', index=0, label_visibility="visible").split(' ')[0]  
+
+def get_space_names():
+    list_of_spaces = []
+    spaces = utils.get_list_of_space()
+    business_lookup = utils.get_space_names()
+    for space in spaces:
+        list_of_spaces.append(str(space[0]) + " [" + business_lookup[space[0]] + "]")
+    return list_of_spaces
 
 
-def database_connection(query):
-    import streamlit as st
-    try:
-        conn = dbapi.connect(
-            address=st.session_state.hdb_address,
-            port=int(st.session_state.hdb_port),
-            user=st.session_state.hdb_user,
-            password=st.session_state.hdb_password
-        )
-        cursor = conn.cursor()
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        conn.close()
-        return rows
-    except Exception as e:
-        st.error(f"Database connection failed: {e}")
-        return []
-
-
-def get_list_of_space():
-    query = f'''
-        SELECT SPACE_ID
-        FROM "DWC_TENANT_OWNER"."SPACE_SCHEMAS"
-        WHERE SCHEMA_TYPE = 'space_schema';
-    '''
-    return database_connection(query) 
-    
 def exposed_views_gui():
     if check_session_state():
         return
 
     st.write("# Exposed Views 👀")   
+    st.markdown("""Find views which are exposed for consumption and check if they have a Data 
+                Access Control assigned.
+            """)
     with st.container(width=2000, border=True):
-
-        st.session_state.dsp_space = st.selectbox(label='Select Space', options=[row[0] for row in get_list_of_space()], help='Select the DSP Space you want to analyze', index=0, label_visibility="visible")  
-
+        st.session_state.dsp_space = selectbox_space()
         if st.button('Get Exposed Views', icon="🔍"):
             with st.spinner("Wait for it...", show_time=True):
-                df = exposed_views.get_exposed_views()    
-                with st.container(width=2000, border=True, horizontal="True"):
-                    st.dataframe(df, width="stretch")  
+                st.session_state.df = exposed_views.get_exposed_views()    
+                if st.session_state.df.empty:
+                   st.info("No exposed views found.", icon="ℹ️")
+                   st.session_state.display = False
+                else:
+                   st.session_state.display = True
+
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
 
 
 
@@ -197,40 +205,29 @@ def object_dependencies_gui():
         return
 
     st.write("# Object Dependencies 📦")   
+    st.markdown("""Find the dependencies for a certain object
+            """)
     with st.container(width=2000, border=True):
 
         object_name = st.text_input(label='Enter Object Name', value='', help='Enter the name of the object you want to analyze', label_visibility="visible")  
 
-        if st.button('Get Object Dependencies', icon="🔍"):
+        if st.button('Find Object Dependencies'):
             with st.spinner("Wait for it...", show_time=True):
-                df = object_dependencies.get_object_dependencies(object_name)
-                with st.container(width=2000, border=True, horizontal="True"):
-                    st.dataframe(df, width="stretch")  
+                st.session_state.df = object_dependencies.get_object_dependencies(object_name)
+                if st.session_state.df.empty:
+                   st.info("No dependencies found.", icon="ℹ️")
+                   st.session_state.display = False
+                else:
+                   st.session_state.display = True
 
-def get_memory_usage(seconds):
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
 
-    query = f'''SELECT 
-    SUBSTRING("TIME", 12, 8) as TIME,
-    ROUND(MEMORY_USED / MEMORY_ALLOCATION_LIMIT * 100,2) as Memory
-
-    FROM M_LOAD_HISTORY_HOST
-    WHERE TO_DATE(LEFT(TIME,10)) = LEFT(NOW(),10) AND 
-    TIME > ADD_SECONDS(NOW(), -{seconds})
-    ORDER BY TIME ASC
-    ;'''
-
-    columns = [  "Time", "Memory"]
-    data = database_connection(query)
-
-    df = pd.DataFrame(data, columns=columns)
-    with st.container(width=2000, border=True, horizontal="True"):
-        placeholder = st.empty()
-        placeholder.line_chart(df,x='Time', y='Memory', x_label='Time', y_label='Memory %', width=2000, height=600)
-
-
-def memory_usage():
-    if ('hdb_address' or 'hdb_user' or 'hdb_password') not in st.session_state:
-        st.warning("Please go to the Settings page and upload a configuration file first.", icon="⚠️")
+def memory_usage_gui():
+    if check_session_state():
         return
 
     st.write("# Memory Usage 🧠")   
@@ -240,108 +237,63 @@ def memory_usage():
 
         if st.button('Refresh', icon="🔄"):
             with st.spinner("Wait for it...", show_time=True):
-                get_memory_usage(seconds)
+                st.session_state.df = memory_usage.get_memory_usage(seconds)
         else:
-            get_memory_usage(seconds)
+            st.session_state.df = memory_usage.get_memory_usage(seconds)
 
-def get_system_monitor():
-    query = f''' SELECT 
-    		"ACTIVE"."CONNECTION_ID",
-    		CONN.CLIENT_APPLICATION,
-    		CONN.CLIENT_TYPE,
-    		CONN.CREATED_BY,
-    		CONN.USER_NAME,
-            MDX."APPLICATION_USER_NAME" AS USER,
-    		"ACTIVE"."STATEMENT_STRING",
-    		("ACTIVE"."ALLOCATED_MEMORY_SIZE"/1048576) as Allocated_Memory,
-    		"ACTIVE"."LAST_EXECUTED_TIME",
-    		"ACTIVE"."LAST_ACTION_TIME"
-    	FROM "M_ACTIVE_STATEMENTS" AS ACTIVE
-    		LEFT JOIN "M_CONNECTIONS" CONN ON ACTIVE."CONNECTION_ID" = CONN."CONNECTION_ID"
-            LEFT JOIN 
-            (SELECT DISTINCT "STATEMENT_ID", "APPLICATION_USER_NAME" FROM "M_SERVICE_THREADS") AS MDX ON MDX."STATEMENT_ID" = ACTIVE."STATEMENT_ID"
-    	WHERE ACTIVE."STATEMENT_STATUS" = 'ACTIVE'
-        ORDER BY MDX."APPLICATION_USER_NAME", ACTIVE."CONNECTION_ID", ACTIVE."ALLOCATED_MEMORY_SIZE" DESC;'''
-    
-    data = database_connection(query)   
-
-    df = pd.DataFrame(data, columns=['Connection ID', 'Client Application', 'Client Type', 'Created By', 'User Name', 'User', 'Statement', 'Allocated Memory (MB)', 'Last Executed Time', 'Last Action Time'])
-    with st.container(width=2000, border=True, horizontal="True"):
+    result = st.empty()
+    with result.container(width=2000, border=True):    
         placeholder = st.empty()
-        placeholder.dataframe(df, width="stretch")
+        placeholder.line_chart(st.session_state.df,x='Time', y='Memory', x_label='Time', y_label='Memory %', width=2000, height=600)
 
-def system_monitor():
+
+
+
+def system_monitor_gui():
     if check_session_state():
         return
 
     st.write("# System Monitor 💻")   
-    
+    st.markdown("""The System Monitor shows all current working connections to the database. 
+                """)
+ 
     with st.container(width=2000, border=True):
         if st.button('Refresh', icon="🔄"):
             with st.spinner("Wait for it...", show_time=True):
-                get_system_monitor()
+                st.session_state.df  = system_monitor.get_system_monitor()
         else:
-            get_system_monitor()
+            st.session_state.df  = system_monitor.get_system_monitor()
 
-def get_orphaned_objects():
-    result = []
-    query = f'''
-    SELECT DISTINCT ARTIFACT_NAME
-    FROM "{st.session_state.dsp_space}$TEC"."$$DEPLOY_ARTIFACTS$$"
-    WHERE ARTIFACT_NAME NOT IN ('SPACE_TEC_OBJECTS', 'DEPLOYED_METADATA', 'ECN_OBJECTS_METADATA', 'VIEW_ANALYZER_RESULTS', 'NOTIFICATION_MAILING_LISTS',
-                                'REPLICATIONFLOW_RUN_DETAILS','DELTA_PROVIDER_SUBSCRIBER', 'TRFFL_EXECUTE_RT_DATA', 'TRFFL_EXECUTE_RT_SETTINGS', 'VALIDATION_TASK_LOG',
-                                'NOTIFICATION_MAILING_RUN_CONFIG','LOCAL_TABLE_VARIANTS','LOCAL_TABLE_OUTBOUND_METRICS','JUSTASK_NLQ_SAMPLES',
-                                
-                                'SAP.CURRENCY.VIEW.TCURC','SAP.CURRENCY.VIEW.TCURV','SAP.CURRENCY.VIEW.TCURX','SAP.CURRENCY.VIEW.TCURF','SAP.CURRENCY.VIEW.TCURT','SAP.CURRENCY.VIEW.TCURN',
-                                'SAP.CURRENCY.VIEW.TCURW', 'SAP.CURRENCY.VIEW.TCURX'
-                                );
-    '''
+    result = st.empty()
+    with result.container(width=2000, border=True):    
+        st.dataframe(data=st.session_state.df, hide_index=True)   
 
-
-    artifacts = database_connection(query)
-
-    where = ', '.join(f"'{a[0]}'" for a in artifacts)
-    query = f'''
-            SELECT *
-            FROM "SYS"."OBJECT_DEPENDENCIES"
-            WHERE BASE_OBJECT_NAME IN ({where});
-        '''
-
-    dependencies = database_connection(query)
-    query = f'''
-                SELECT *
-                FROM "SYS"."ASSOCIATIONS"
-                WHERE TARGET_OBJECT_NAME IN({where});
-            '''
-    associations = database_connection(query)
-
-    for artifact in artifacts:
-
-        dependencies_count = [row for row in dependencies if artifact[0] in row]
-        associations_count = [row for row in associations if artifact[0] in row]
-
-        result.append((st.session_state.dsp_space, artifact[0],len(dependencies_count), len(associations_count)))
-    # DataFrame bauen
-    df = pd.DataFrame(result, columns=['Space', 'Artifact', 'Dependencies', 'Associations'])
-    # nur Objekte ohne Dependencies & Associations
-    df_orphaned= df[(df["Dependencies"] == 0) & (df["Associations"] == 0)]
-    with st.container(width=2000, border=True, horizontal="True"):
-        st.dataframe(df_orphaned, width="stretch")  
-
-
-
-def orphaned_objects():
+def orphaned_objects_gui():
     if check_session_state():
         return
 
-    st.write("# Find Orphaned Objects 🕵️‍♂️")   
+    st.write("# Find Orphaned Objects 🚜")   
+    st.markdown("""Find all orphaned objects in a certain space.
+            """)
     with st.container(width=2000, border=True):
 
-        st.session_state.dsp_space = st.selectbox(label='Select Space', options=[row[0] for row in get_list_of_space()], help='Select the DSP Space you want to analyze', index=0, label_visibility="visible")  
+        st.session_state.dsp_space = selectbox_space()
 
-        if st.button("Let's go digging", icon="🚜"):
+        if st.button("Let's go digging"):
             with st.spinner("Wait for it...", show_time=True):
-                get_orphaned_objects()
+                st.session_state.df = orphaned_objects.get_orphaned_objects()
+                if st.session_state.df.empty:
+                   st.info("No orphaned objects found.", icon="ℹ️")
+                   st.session_state.display = False
+                else:
+                   st.session_state.display = True
+
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
+
 
 def taskchain_gui():
     if check_session_state():
@@ -350,8 +302,8 @@ def taskchain_gui():
     st.write("# Find Objects in Taskchains 🕵️‍♂️")   
     with st.container(width=2000, border=True):
 
-        st.session_state.dsp_space = st.selectbox(label='Select Space', options=[row[0] for row in get_list_of_space()], help='Select the DSP Space you want to analyze', index=0, label_visibility="visible")  
-       
+        st.session_state.dsp_space = selectbox_space()
+
         if st.button("Searching", icon="🔍"):
             with st.spinner("Wait for it...", show_time=True):
                 df = objects_in_taskchain.get_objects_in_taskchain()
@@ -371,19 +323,51 @@ def database_tables_gui():
         return
 
     st.write("# Database Tables Size 📚")   
+    st.markdown(""" 
+                Overview of all tables and views with the consuming disk and memory as well as number of records.""")
     with st.container(width=2000, border=True):
-        if st.button('Get Database Tables', icon="🔍"):
-            with st.spinner("Wait for it...", show_time=True):
-                df = database_tables.get_database_tables()    
-                with st.container(width=2000, border=True, horizontal="True"):
-                    st.dataframe(df, width="stretch")
+        with st.spinner("Wait for it...", show_time=True):
+            st.session_state.df = database_tables.get_database_tables()    
+            if st.session_state.df.empty:
+                st.info("No shares found.", icon="ℹ️")
+                st.session_state.display = False
+            else:
+                st.session_state.display = True
 
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+
+
+            search_bar_columns = st.columns((2, 1, 0.5, 0.75, 1))
+            with search_bar_columns[1]:
+                search_text = st.text_input(
+                    "Search", label_visibility="collapsed", placeholder="Search Text"
+                )
+            with search_bar_columns[2]:
+                is_regex = st.toggle("Regex", value=False)
+            with search_bar_columns[3]:
+                case_sensitive = st.toggle("Case Sensitive", value=False)
+            with search_bar_columns[4]:
+                highlight_match = st.toggle("Highlight Matching Cells", value=True)
+
+            with DataFrameSearch(
+                dataframe=st.session_state.df,
+                text_search=search_text,
+                case_sensitive=case_sensitive,
+                regex_search=is_regex,
+                highlight_matches=highlight_match,
+            ) as df:
+                st.dataframe(data=df, use_container_width=True, hide_index=True)
+            st.session_state.display = False
 
 def userlist_gui():
     if check_session_state():
         return
     
     st.write("# User Overview 👥")
+    st.markdown(""" 
+                Overview of all users in the tenant with time of login, last login and days since the last login.""")
     with st.container(width=2000, border=True):
         with st.spinner("Wait for it...", show_time=True):
             df = userlist.get_user_overview()    
@@ -393,13 +377,17 @@ def taskchain_start_gui():
     if check_session_state():
         return
     
-    st.write("# Start Taskchain ▶️")
+    st.write("# Run Taskchain ▶️")
+    st.markdown(""" 
+                Run a TackChain in your tenant. Select a certain space and enter the technical 
+                name of the TackChain""")
     with st.container(width=2000, border=True): 
-        st.session_state.dsp_space = st.selectbox(label='Select Space', options=[row[0] for row in get_list_of_space()], help='Select the DSP Space you want to analyze', index=0, label_visibility="visible")  
+        st.session_state.dsp_space = selectbox_space()
         taskchain_name = st.text_input(label='Enter Taskchain Name', value='', help='Enter the name of the taskchain you want to start', label_visibility="visible", key="taskchain_name")
         if st.button('Start Taskchain', icon="▶️"):
             with st.spinner("Wait for it...", show_time=True):
-                taskchain_start.start_taskchain(st.session_state.dsp_space, taskchain_name)
+                logId = taskchain_start.start_taskchain(st.session_state.dsp_space, taskchain_name)
+                st.info(f"The log id is {logId}")
 
 def notifications_gui():
     if check_session_state():
@@ -407,8 +395,12 @@ def notifications_gui():
     
     st.write("# Notifications 🔔")
     with st.container(width=2000, border=True): 
+        option = st.selectbox("What notifications should be displayed?",
+                                ("All", "Successful", "Error"))
+
+
         with st.spinner("Wait for it...", show_time=True):
-            df = notifcations.get_notifications()
+            df = notifcations.get_notifications(option)
             if df.empty:
                 st.info("No notifications found.", icon="ℹ️")
             else:
@@ -421,8 +413,7 @@ def unused_objects_gui():
     
     st.write("# Unused Objects 🙈")
     with st.container(width=2000, border=True): 
-        st.session_state.dsp_space = st.selectbox(label='Select Space', options=[row[0] for row in get_list_of_space()], help='Select the DSP Space you want to analyze', index=0, label_visibility="visible")  
-       
+        st.session_state.dsp_space = selectbox_space()
 
         with st.spinner("Wait for it...", show_time=True):
             df = unused_objects.get_unused_objects()
@@ -439,7 +430,7 @@ def delete_mass_gui():
     st.write("# Delete Objects 🚮")
        
     with st.container(width=1000, border=True):     
-        st.session_state.dsp_space = st.selectbox(label='Select Space', options=[row[0] for row in get_list_of_space()], help='Select the DSP Space you want to use', index=0, label_visibility="visible")  
+        st.session_state.dsp_space = selectbox_space()
         ids = st.text_area(label="", help="Enter the IDs of the objects you want to delete")
         if st.button('Delete Objects'):
             with st.spinner("Wait for it...", show_time=True):
@@ -451,29 +442,129 @@ def view_overview_gui():
         return
     
     st.write("# View Persistency Overview 👨‍💻")
-    with st.container(width=1000, border=True):     
+    with st.container(width=2000, border=True, horizontal=True):     
         with st.spinner("Wait for it...", show_time=True):
             df = view_overview.get_persisted_views()
             st.dataframe(df, width="stretch")
+
+def taskchain_logs_gui():
+    if check_session_state():
+        return
+    
+    st.write("# Task Chain Logs 🔗")
+    with st.container(width=2000, border=True):   
+        st.session_state.dsp_space = selectbox_space()
+        if st.button('Get Logs'):
+            with st.spinner("Wait for it...", show_time=True):
+                df = taskchainlogs.get_log_information(st.session_state.dsp_space)
+                st.dataframe(df, width="stretch")
+
+def shares_per_space_gui():
+   
+    if check_session_state():
+        return
+
+    st.write("# Shares per Space 🕵️‍♂️")
+    st.markdown(""" 
+                Find all shares from the selected space. Either for a certain object or for all objects.""")
+    with st.container(width=2000, border=True):   
+        st.session_state.dsp_space = selectbox_space()
+        artifact = st.text_input(label='Enter Object Name', value='', help='Enter the name of the object', label_visibility="visible")
+        if st.button('Get Shares'):
+            with st.spinner("Wait for it...", show_time=True):
+                st.session_state.df = shares_per_space.allSharesFromOneSpace(artifact)
+                if st.session_state.df.empty:
+                   st.info("No shares found.", icon="ℹ️")
+                   st.session_state.display = False
+                else:
+                   st.session_state.display = True
+
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
+
+
+def shares_per_target_gui():
+
+    if check_session_state():
+        return
+
+    st.write("# Shares per Target 💠")
+    st.markdown(""" 
+                Find all objects which are shared from one space to the selected target space.""")
+    with st.container(width=2000, border=True):   
+        st.session_state.dsp_space = selectbox_space()
+        if st.button('Get Shares'):
+            with st.spinner("Wait for it...", show_time=True):
+                st.session_state.df  = shares_per_space.shares_with_target_space()
+                if st.session_state.df.empty:
+                   st.info("No shares found.", icon="ℹ️")
+                   st.session_state.display = False
+                else:
+                   st.session_state.display = True
+
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
+
+def dac_per_user_gui():
+    print('Y')
+
+
+def column_in_object_gui():
+
+    if check_session_state():
+        return
+     
+    st.write("# Find column in Object 🤞")
+             
+    st.markdown(""" 
+                You can enter a technical column name and search overall objects in the 
+                Datasphere tenant!""")
+
+    with st.container(width=2000, border=True):   
+        column = st.text_input(label='Enter Column Name', value='', help='Enter the column of the object', label_visibility="visible")
+        if st.button('Find Objects'):
+            with st.spinner("Wait for it...", show_time=True):
+               st.session_state.df = find_column.find_objects(column)
+               if  st.session_state.df.empty:
+                   st.info("No object found.", icon="ℹ️")
+                   st.session_state.display = False
+               else:
+                   st.session_state.display  = True
+        
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
 
 
 pages = {
     "Home": [
         st.Page(intro, title="Start"),
-        st.Page(settings, title="Manage your settings"),
+        st.Page(settings, title="Manage your settings", icon="⚙️"),
     ],
     "System": [
-        st.Page(memory_usage, title="Memory Usage"),
-        st.Page(system_monitor, title="System Monitor"),
+        st.Page(memory_usage_gui, title="Memory Usage", icon="🧠"),
+        st.Page(system_monitor_gui, title="System Monitor", icon="💻"),
         st.Page(notifications_gui, title="Notifications"),
-        #st.Page(taskchain_logs_gui, title="TaskChain Logs"),
+        st.Page(taskchain_logs_gui, title="TaskChain Logs"),
+
     ],
     "Tools": [
-        st.Page(taskchain_start_gui, title="TaskChain Start"),
+        st.Page(taskchain_start_gui, title="Run TaskChain", icon="▶️"),
+        st.Page(column_in_object_gui, title="Column in Object", icon="🤞"),
+        st.Page(dac_per_user_gui, title="DataAccessControl per User"),
     ],
     
     "HouseKeeping": [
-        st.Page(orphaned_objects, title="Orphaned Objects"),
+        st.Page(orphaned_objects_gui, title="Orphaned Objects", icon="🚜"),
+        st.Page(object_dependencies_gui, title="Find Object Dependencies", icon="📦"),
         st.Page(unused_objects_gui, title="Unused Objects"),
         st.Page(delete_mass_gui, title="Delete Objects"),
         st.Page(view_overview_gui, title="View Persistency Overview")
@@ -481,10 +572,12 @@ pages = {
 
     "Administration": [
         st.Page(taskchain_gui, title="Taskchain Objects"),
-        st.Page(exposed_views_gui, title="Exposed Views"),
-        st.Page(object_dependencies_gui, title="Object Dependencies"),
-        st.Page(database_tables_gui, title="Database Tables Size"),
-        st.Page(userlist_gui, title="User Overview"),
+        st.Page(exposed_views_gui, title="Exposed Views", icon="👀"),
+
+        st.Page(database_tables_gui, title="Database Tables Size", icon="📚"),
+        st.Page(userlist_gui, title="User Overview", icon="👥"),
+        st.Page(shares_per_space_gui, title="Shares per Space", icon="🕵️‍♂️"),
+        st.Page(shares_per_target_gui, title="Shares per Target", icon="💠"),
     ]
    
 }

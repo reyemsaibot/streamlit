@@ -1,0 +1,62 @@
+{
+
+
+    "task_chain_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/taskchains/",
+    "task_chain_technical": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/taskchains/{technicalName}",
+    "run_task_chain": "#dsp_url/dwaas-core/api/v1/tasks/chains/{spaceID}/run/{taskChain}",
+    "task_chain_logs": "#dsp_url/dwaas-core/tf/{spaceID}/logs?objectId={taskChain}",
+    "task_chain_log_detail": "#dsp_url/dwaas-core/api/v1/tasks/logs/{spaceID}/{logID}",
+
+
+    "list_of_dacs": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/dataaccesscontrols",
+    "dac_technical_name": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/dataaccesscontrols/{technicalName}",
+    "shares": "#dsp_url/dwaas-core/repository/shares",
+    "shares_per_target": "#dsp_url/dwaas-core/repository/shares?targetSpace={spaceID}",
+    "shares_per_space": "#dsp_url/dwaas-core/repository/shares?spaceName={spaceID}&objectNames={objectName}",
+
+    "spaces": "#dsp_url/dwaas-core/api/v1/content",
+    "space_tables": "#dsp_url/dwaas-core/resources/spaces?tables=true&spaceids={spaceID}",
+    "list_of_spaces": "#dsp_url/dwaas-core/api/v1/spaces",
+    "spaces_name": "#dsp_url/dwaas-core/repository/spaces?inSpaceManagement=true&details=id%2Cname%2Cbusiness_name",
+
+    "scoped_roles": "#dsp_url/dwaas-core/api/v1/scopedroles",
+    "scopes": "#dsp_url/dwaas-core/api/v1/scopedroles/{scope}/scopes",
+
+    "user_list": "#dsp_url/sap/fpa/services/rest/epm/security/list/users?detail=true",
+
+    "replication_flow_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/replicationflows/?top={numberOfEntries}",
+    "replication_flow_detail": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/replicationflows/{replicationflow}",
+
+    "local_table_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/localtables/",
+    "local_table_detail": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/localtables/{localtable}",
+
+    "remote_table_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/remotetables",
+    "remote_table_detail": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/remotetables/{remotetables}",
+
+    "data_flow_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/dataflows",
+    "data_flow_detail": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/dataflows/{dataflow}",
+
+    "view_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/views/",
+    "view_detail": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/views/{view}",
+    "persisted_views": "#dsp_url/dwaas-core/monitor/{spaceID}/persistedViews?mode=persistedOrWithRuns&includeBusinessNames=true",
+    "partitioning": "#dsp_url/dwaas-core/partitioning/{spaceID}/persistedViews/{objectName}",
+
+    "analytic_model_list": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/analyticmodels/",
+    "analytic_model_detail": "#dsp_url/dwaas-core/api/v1/spaces/{spaceID}/analyticmodels/{analyticmodel}",
+
+
+    "notification": "#dsp_url/dwaas-core/notifications",
+
+    "all_design_objects": "#dsp_url/deepsea/repository/{spaceID}/designObjects",
+    "dependency": "#dsp_url/deepsea/repository/dependencies/?ids={ID}&recursive=true&impact=true&lineage=false&dependencyTypes=sap.dis.target,csn.entity.association,csn.query.from,sap.dis.source,sap.dis.targetOf,sap.dis.replicationflow.source,sap.dis.replicationflow.targetOf,sap.dwc.transformationflow.source,sap.dwc.transformationflow.targetOf,sap.dwc.idtEntity,csn.derivation.lookupEntity,csn.valueHelp.entity",
+
+    "monitor_application": "#dsp_url/dwaas-core/tf/{spaceID}/schedules?applicationId={application}",
+    "link_monitor_object": "#dsp_url/dwaas-core/index.html#/dataintegration&/di/{spaceID}/{monitortype}/{objectName}",
+
+    "delete_content": "#dsp_url/dwaas-core/tf/directexecute",
+    "upload_content": "#dsp_url/dwaas-core/data/{spaceID}/tables/{objectName}",
+
+    "delete_objects": "#dsp_url/dwaas-core/repository/{spaceID}/objects/"
+
+
+}

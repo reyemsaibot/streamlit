@@ -1,8 +1,7 @@
 import json
 import pandas as pd
 import streamlit as st
-import streamlit_app as app
-
+import utils
 
 def get_csn_files():
     query = f'''
@@ -18,7 +17,7 @@ def get_csn_files():
         ON A.ARTIFACT_NAME = B.ARTIFACT_NAME
         AND A.ARTIFACT_VERSION = B.MAX_ARTIFACT_VERSION;
     '''
-    return app.database_connection(query)
+    return utils.database_connection(query)
 
 def get_exposed_views():
     exposedViews = []
@@ -36,8 +35,6 @@ def get_exposed_views():
 
         objectName = list(csn_loaded['definitions'].keys())[0]
         label = csn_loaded['definitions'][objectName]['@EndUserText.label']
-        if objectName == 'ILT_MM_S4_GOODSMOVEMENTDOCUMENT':
-            print(csn)
         try:
             exposed = csn_loaded['definitions'][objectName]['@DataWarehouse.consumption.external']
         except KeyError:

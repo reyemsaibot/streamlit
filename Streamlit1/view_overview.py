@@ -14,7 +14,7 @@ def get_all_spaces():
     return list_of_spaces
 
 
-def get_scheduled_views(space, header):
+def get_scheduled_views(space):
     # Initialize OAuth session
     header = utils.initializeGetOAuthSession(st.session_state.token, st.session_state.secret)
     
@@ -22,6 +22,7 @@ def get_scheduled_views(space, header):
                                                                 **{"application": 'VIEWS'})
 
     response = requests.get(url, headers=header)
+
     return response.json()
 
 def get_persisted_views():
@@ -33,7 +34,7 @@ def get_persisted_views():
     for space in get_all_spaces():
         url = utils.get_url(st.session_state.dsp_host, "persisted_views").format(**{"spaceID": space})
         response = requests.get(url, headers=header)
-        print(space + '||' + str(response.status_code))
+        #print(space + '||' + str(response.status_code))
 
         # Nur wenn Status ist OK
         if response.status_code == 200:
@@ -44,7 +45,7 @@ def get_persisted_views():
                 scheduled_view_list.append(scheduled_view['objectId'])
 
             for view in views['tables']:
-
+               
                 # Reset Variable
                 scheduled = ''
 
@@ -77,7 +78,11 @@ def get_persisted_views():
 
                 memory_consumption = str(view['inMemorySizeReplicaTableMB']) + ' MB'
                 disk_size = str(view['diskSizeReplicaTableInMB']) + ' MB'
-                business_name = view['viewBusinessName']
+                try:
+                    business_name = view['viewBusinessName']
+                except KeyError:
+                    business_name = ''
+                
                 number_of_records = view['numberOfRecords']
 
                 if view['partitioningExists']:
