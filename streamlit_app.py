@@ -85,12 +85,11 @@ def settings():
                 token = st.file_uploader("Choose a token file", type="json")
 
                 st.session_state.separate = True
-
-                if secret is not None:
-                     st.session_state['secret'] = secret
-                     print(st.session_state['secret'])
-                if token is not None:
-                     st.session_state['token'] = token
+                secret_loaded = json.load(secret)
+                try:
+                    token_loaded = json.load(token)
+                except json.decoder.JSONDecodeError:
+                    token_loaded = {""}
 
             processed = True
     placeholder = st.empty()
@@ -116,16 +115,21 @@ def settings():
         st.write("### OAuth Connection")
 
         if st.button('Start OAuth', icon="🔑"):
-            oauth_process()
+            token_file = oauth_process(secret_loaded)
             if st.session_state.token_received != '':
                 st.success("Token received and saved successfully!", icon="🎉")
+                st.download_button(
+                    label="📥 Create new configuration file",
+                    data=token_file,
+                    file_name="token.json",
+                    mime="application/json")
             else:
                 st.error("Failed to retrieve token. Please try again.", icon="❌")
         
 @st.dialog("Logon with OAuth")
-def oauth_process():
-   
-    code_url = get_initial_token(st.session_state.secret)   
+def oauth_process(secret_loaded: str):
+    
+    code_url = get_initial_token(st.session_state.secret, secret_loaded)   
     st.page_link(code_url, label=code_url, icon="🌎")
     st.info("Please enter the code you received after the OAuth process below.", icon="ℹ️")
     with st.form("my_form",clear_on_submit=False, enter_to_submit=True, border=True, width="stretch", height="content"):
@@ -134,24 +138,31 @@ def oauth_process():
 
     if submitted:
         with st.spinner("Wait for it...", show_time=True):
-            st.session_state.token_received = access_request(st.session_state.secret,st.session_state.token,code) 
+            st.session_state.token_received,token_file = access_request(st.session_state.secret,st.session_state.token,code, secret_loaded) 
+        
             st.rerun()
+            return token_file
 
-def get_initial_token(path_of_secret_file):
+def get_initial_token(path_of_secret_file, secret_loaded: str):
     if st.session_state.separate == False:
         f = open(path_of_secret_file)
+        secrets = json.load(f)
     else:
-        f = st.session_state.secret
-
-    secrets = json.load(f)
+        secrets = secret_loaded
 
     client_id_encode = urllib.parse.quote(secrets['client_id'])
     code_url = secrets['authorization_url'] + '?response_type=code&client_id=' + client_id_encode
     return code_url
 
-def access_request(path_of_secret_file, token_file, code):
-    f = open(path_of_secret_file)
-    secrets = json.load(f)
+def access_request(path_of_secret_file, token_file, code, secret_loaded: str):
+    if st.session_state.separate == False:
+        f = open(path_of_secret_file)
+        secrets = json.load(f)
+    else:
+        secrets = secret_loaded
+
+
+    print(secrets)
     session = requests.session()
     OAuth_AccessRequest = session.post( secrets['token_url'],
                                         auth=(secrets['client_id'], secrets['client_secret']),
@@ -165,6 +176,7 @@ def access_request(path_of_secret_file, token_file, code):
                                              }
                                       )
     token = OAuth_AccessRequest.json()
+    print(token)
     expire = datetime.datetime.now() + datetime.timedelta(0,token['expires_in'])
 
     token['expire'] = expire.strftime("%Y-%m-%d %H:%M:%S")
@@ -174,13 +186,10 @@ def access_request(path_of_secret_file, token_file, code):
         with open(token_file, 'w') as f:
             json.dump(token, f)
     else:
-        st.download_button(
-                    label="Download Token File",
-                    data=token,
-                    file_name="token.json",
-                    mime="application/json")
+        token_file = token
+                    
 
-    return OAuth_AccessRequest.json()['access_token']
+    return OAuth_AccessRequest.json()['access_token'], token_file
 
 def check_session_state():
     if ('hdb_address' or 'hdb_user' or 'hdb_password' or 'secret' or 'token') not in st.session_state:
