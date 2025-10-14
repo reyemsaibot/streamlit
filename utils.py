@@ -21,14 +21,12 @@ def initializeGetOAuthSession(token_file, secrets_file):
 
     if st.session_state.separate == False:
         f = open(token_file)
+        token = json.load(f)
     else:
-        f = st.session_state.token
-
-
-    f = open(token_file)
+        token = st.session_state.token
 
     try:
-        token = json.load(f)
+        
         expire = datetime.strptime(token['expire'], "%Y-%m-%d %H:%M:%S")
     except JSONDecodeError:
         pass
