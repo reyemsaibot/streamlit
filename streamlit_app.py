@@ -186,9 +186,15 @@ def selectbox_space():
 def get_space_names():
     list_of_spaces = []
     spaces = utils.get_list_of_space()
+    if spaces == []:
+        st.error("No Spaces received!")
+        return
     business_lookup = utils.get_space_names()
     for space in spaces:
-        list_of_spaces.append(str(space[0]) + " [" + business_lookup[space[0]] + "]")
+        try:
+            list_of_spaces.append(str(space[0]) + " [" + business_lookup[space[0]] + "]")
+        except KeyError:
+            list_of_spaces.append(str(space[0]))
     return list_of_spaces
 
 
