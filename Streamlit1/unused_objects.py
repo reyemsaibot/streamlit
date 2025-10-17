@@ -9,6 +9,8 @@ unused_objects = []
 number_of_entries = 100
 
 def get_unused_objects():
+    no_auth = ""
+
     # Initialize OAuth session
     header = utils.initializeGetOAuthSession(st.session_state.token, st.session_state.secret)
 
@@ -22,9 +24,10 @@ def get_unused_objects():
     # check if no authorization for a space is given
     try:
         all_design_objects = requests.get(url, headers=header).json()
+        
     except requests.exceptions.JSONDecodeError:
-        st.warning("No authorization for this space", icon="ℹ️")
-        return pd.DataFrame()
+        no_auth = st.warning("No authorization for this space", icon="ℹ️")
+        return pd.DataFrame(), no_auth
     
     design_objects_dict = {obj['qualified_name']: obj['id'] for obj in all_design_objects['results']}
 
@@ -42,7 +45,7 @@ def get_unused_objects():
         for object in dependency:
             if dependency and object['dependencies'] == []:
                 unused_objects.append((object['qualifiedName'], object['id']))
-        return pd.DataFrame(unused_objects, columns=['Technical Name', 'ID'])
+        return pd.DataFrame(unused_objects, columns=['Technical Name', 'ID']), no_auth
 
 
 

@@ -38,9 +38,9 @@ def get_log_information(spaceID):
             link = utils.get_url(st.session_state.dsp_host, "link_monitor_object").format(**{"spaceID": spaceID},
                                                                 **{"monitortype": 'taskChainMonitor'}, **{"objectName": object})
 
-            log_details.append((spaceID, logID, object,task_chain[1], str(startTime).split(".")[0], str(endTime).split(".")[0], duration, status))
+            log_details.append((spaceID, logID, object,task_chain[1], str(startTime).split(".")[0], str(endTime).split(".")[0], duration, status, link))
 
-    return pd.DataFrame(log_details, columns=['Space', 'LogID', 'Object', 'Description', 'Start', 'End', 'Duration', 'Status'])
+    return pd.DataFrame(log_details, columns=['Space', 'LogID', 'Object', 'Description', 'Start', 'End', 'Duration', 'Status', 'Link'])
 
 
 

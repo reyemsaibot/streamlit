@@ -19,17 +19,14 @@ def initializeGetOAuthSession(token_file, secrets_file):
     expire = datetime(1970, 1, 1)
     # Get token if available
 
-    if st.session_state.separate == False:
-        f = open(token_file)
-        token = json.load(f)
-    else:
-        token = st.session_state.token
-        print(token)
+
+    token = token_file
 
     try:
-        
+
         expire = datetime.strptime(token['expire'], "%Y-%m-%d %H:%M:%S")
     except JSONDecodeError:
+
         pass
 
     if token == '':

@@ -7,13 +7,7 @@ import streamlit as st
 
 def get_initial_token(path_of_secret_file, token_file):
 
-    if st.session_state.separate == False:
-        f = open(path_of_secret_file)
-    else:
-        f = st.session_state.secret
-
-    secrets = json.load(f)
-
+    secrets = path_of_secret_file
     client_id_encode = urllib.parse.quote(secrets['client_id'])
 
     code_url = secrets['authorization_url'] + '?response_type=code&client_id=' + client_id_encode
@@ -44,18 +38,8 @@ def get_initial_token(path_of_secret_file, token_file):
 
 def refresh_token(path_of_secret_file, token_file):
 
-    
-
-
-    if st.session_state.separate == False:
-        f = open(path_of_secret_file)
-        secrets = json.load(f)
-        token = read_file(token_file)
-    else:
-        secrets = st.session_state.secret
-        token = st.session_state.token
-
-    
+    secrets = path_of_secret_file
+    token = token_file
 
     extra = { 'client_id': secrets['client_id'],
               'client_secret': secrets['client_secret']

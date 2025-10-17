@@ -1,4 +1,4 @@
-from Streamlit1 import object_dependencies, exposed_views, database_tables, objects_in_taskchain, userlist, taskchain_start, notifcations, delete_objects, view_overview, unused_objects, taskchainlogs, shares_per_space, find_column, orphaned_objects, system_monitor, memory_usage, business_name
+from Streamlit1 import object_dependencies, exposed_views, database_tables, objects_in_taskchain, userlist, taskchain_start, notifcations, delete_objects, view_overview, unused_objects, taskchainlogs, shares_per_space, find_column, orphaned_objects, system_monitor, memory_usage, business_name, data_integration
 import streamlit as st
 import json
 import pandas as pd
@@ -38,7 +38,8 @@ def settings():
         "display",
         "df",
         "count",
-        "separate"
+        "separate",
+        "token_file",
     ]:
         st.session_state.setdefault(key, "")
 
@@ -64,11 +65,12 @@ def settings():
        
     with st.container(border=True):
         st.write("### Upload Configuration File")
-        uploaded_file = st.file_uploader("Choose a file", type="json")
+        uploaded_file = st.file_uploader("Choose a file", type="json", key="upload")
+    
+        upload_secret = st.file_uploader("Choose a secret file", type="json", key="secret_up")
+        upload_token = st.file_uploader("Choose a token file", type="json", key="token_up")
         
-        separated = st.checkbox("Separated Upload of Secret & Token file")
-
-        if uploaded_file is not None:       
+        if uploaded_file is not None and upload_secret is not None and upload_token is not None:       
            
             config = json.load(uploaded_file)
             st.session_state['dsp_host'] = config["DATASPHERE"]["dsp_host"]
@@ -77,19 +79,11 @@ def settings():
             st.session_state['hdb_user'] = config["HDB"]["hdb_user"]
             st.session_state['hdb_password'] = config["HDB"]["hdb_password"]
 
-            if separated == False:
-                st.session_state['secret'] = config["SETTINGS"]["secrets_file"]
-                st.session_state['token'] = config["SETTINGS"]["token_file"]
-            else: 
-                secret = st.file_uploader("Choose a secret file", type="json")
-                token = st.file_uploader("Choose a token file", type="json")
+         
+            
 
-                st.session_state.separate = True
-                secret_loaded = json.load(secret)
-                try:
-                    token_loaded = json.load(token)
-                except json.decoder.JSONDecodeError:
-                    token_loaded = {""}
+            st.session_state['secret'] = json.load(upload_secret)
+            st.session_state['token'] = json.load(upload_token)
 
             processed = True
     placeholder = st.empty()
@@ -115,21 +109,22 @@ def settings():
         st.write("### OAuth Connection")
 
         if st.button('Start OAuth', icon="🔑"):
-            oauth_process(secret_loaded)
+            oauth_process()
             if st.session_state.token_received != '':
                 st.success("Token received and saved successfully!", icon="🎉")
                 st.download_button(
                     label="Download token file",
                     data=st.session_state.token_file,
                     file_name="token.json",
-                    mime="application/json")
+                    mime="application/json",
+                    key="token_download" )
             else:
                 st.error("Failed to retrieve token. Please try again.", icon="❌")
         
 @st.dialog("Logon with OAuth")
-def oauth_process(secret_loaded: str):
+def oauth_process():
     
-    code_url = get_initial_token(st.session_state.secret, secret_loaded)   
+    code_url = get_initial_token(st.session_state.secret)   
     st.page_link(code_url, label=code_url, icon="🌎")
     st.info("Please enter the code you received after the OAuth process below.", icon="ℹ️")
     with st.form("my_form",clear_on_submit=False, enter_to_submit=True, border=True, width="stretch", height="content"):
@@ -138,28 +133,20 @@ def oauth_process(secret_loaded: str):
 
     if submitted:
         with st.spinner("Wait for it...", show_time=True):
-            st.session_state.token_received = access_request(st.session_state.secret,st.session_state.token,code, secret_loaded) 
-        
+            st.session_state.token_received = access_request(st.session_state.secret,st.session_state.token,code) 
             st.rerun()
 
-def get_initial_token(path_of_secret_file, secret_loaded: str):
-    if st.session_state.separate == False:
-        f = open(path_of_secret_file)
-        secrets = json.load(f)
-    else:
-        secrets = secret_loaded
+def get_initial_token(path_of_secret_file):
+   
+    secrets = path_of_secret_file
+
 
     client_id_encode = urllib.parse.quote(secrets['client_id'])
     code_url = secrets['authorization_url'] + '?response_type=code&client_id=' + client_id_encode
     return code_url
 
-def access_request(path_of_secret_file, token_file, code, secret_loaded: str):
-    if st.session_state.separate == False:
-        f = open(path_of_secret_file)
-        secrets = json.load(f)
-    else:
-        secrets = secret_loaded
-
+def access_request(path_of_secret_file, token_file, code):
+    secrets = path_of_secret_file
 
     print(secrets)
     session = requests.session()
@@ -175,18 +162,14 @@ def access_request(path_of_secret_file, token_file, code, secret_loaded: str):
                                              }
                                       )
     token = OAuth_AccessRequest.json()
-    print(token)
+
     expire = datetime.datetime.now() + datetime.timedelta(0,token['expires_in'])
 
     token['expire'] = expire.strftime("%Y-%m-%d %H:%M:%S")
 
     # Write token to file
-    if st.session_state.separate == False:
-        with open(token_file, 'w') as f:
-            json.dump(token, f)
-    else:
-        st.session_state.token_file = token
-                    
+    st.session_state.token_file = json.dump(token)
+    print(token)                
 
     return OAuth_AccessRequest.json()['access_token']
 
@@ -219,7 +202,7 @@ def exposed_views_gui():
             """)
     with st.container(width=2000, border=True):
         st.session_state.dsp_space = selectbox_space()
-        if st.button('Get Exposed Views', icon="🔍"):
+        if st.button('Get Exposed Views'):
             with st.spinner("Wait for it...", show_time=True):
                 st.session_state.df = exposed_views.get_exposed_views()    
                 if st.session_state.df.empty:
@@ -340,7 +323,7 @@ def taskchain_gui():
 
         st.session_state.dsp_space = selectbox_space()
 
-        if st.button("Searching", icon="🔍"):
+        if st.button("Searching"):
             with st.spinner("Wait for it...", show_time=True):
                 df = objects_in_taskchain.get_objects_in_taskchain()
                 if df.empty:
@@ -364,17 +347,8 @@ def database_tables_gui():
     with st.container(width=2000, border=True):
         with st.spinner("Wait for it...", show_time=True):
             st.session_state.df = database_tables.get_database_tables()    
-            if st.session_state.df.empty:
-                st.info("No shares found.", icon="ℹ️")
-                st.session_state.display = False
-            else:
-                st.session_state.display = True
+            st.dataframe(data=st.session_state.df, hide_index=True)
 
-    result = st.empty()
-    if st.session_state.display:
-        with result.container(width=2000, border=True):    
-            st.dataframe(data=st.session_state.df, use_container_width=True, hide_index=True)
-            st.session_state.display = False
 
 def userlist_gui():
     if check_session_state():
@@ -399,7 +373,7 @@ def taskchain_start_gui():
     with st.container(width=2000, border=True): 
         st.session_state.dsp_space = selectbox_space()
         taskchain_name = st.text_input(label='Enter Taskchain Name', value='', help='Enter the name of the taskchain you want to start', label_visibility="visible", key="taskchain_name")
-        if st.button('Start Taskchain', icon="▶️"):
+        if st.button('Start Taskchain'):
             with st.spinner("Wait for it...", show_time=True):
                 logId = taskchain_start.start_taskchain(st.session_state.dsp_space, taskchain_name)
                 st.info(f"The log id is {logId}")
@@ -409,17 +383,26 @@ def notifications_gui():
         return
     
     st.write("# Notifications 🔔")
+    st.markdown(""" 
+                Display notifications""")    
     with st.container(width=2000, border=True): 
         option = st.selectbox("What notifications should be displayed?",
                                 ("All", "Successful", "Error"))
+        if st.button('Get Notifications'):
+            with st.spinner("Wait for it...", show_time=True):
+                st.session_state.df = notifcations.get_notifications(option)
+                if st.session_state.df.empty:
+                    st.info("No notifications found.", icon="ℹ️")
+                    st.session_state.display = False
+                else:
+                    st.session_state.display = True
 
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
 
-        with st.spinner("Wait for it...", show_time=True):
-            df = notifcations.get_notifications(option)
-            if df.empty:
-                st.info("No notifications found.", icon="ℹ️")
-            else:
-                st.dataframe(df, width="stretch")
 
 
 def unused_objects_gui():
@@ -427,15 +410,27 @@ def unused_objects_gui():
         return
     
     st.write("# Unused Objects 🙈")
+    st.markdown(""" 
+                Find all unused objects and return an ID for deletion.""")
+
     with st.container(width=2000, border=True): 
         st.session_state.dsp_space = selectbox_space()
 
         with st.spinner("Wait for it...", show_time=True):
-            df = unused_objects.get_unused_objects()
-            if df.empty:
+            st.session_state.df, no_auth = unused_objects.get_unused_objects()
+            if st.session_state.df.empty and no_auth == "":
                 st.info("No unused objects found.", icon="ℹ️")
-            else:
-                st.dataframe(df, width="stretch")
+                st.session_state.display = False
+            elif no_auth == "":
+                st.session_state.display = True                
+
+
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True)   
+            st.session_state.display = False
+
 
 
 def delete_mass_gui():
@@ -443,7 +438,8 @@ def delete_mass_gui():
         return
     
     st.write("# Delete Objects 🚮")
-       
+    st.markdown(""" 
+            Delete objects based on the internal ID.""")   
     with st.container(width=1000, border=True):     
         st.session_state.dsp_space = selectbox_space()
         ids = st.text_area(label="", help="Enter the IDs of the objects you want to delete")
@@ -457,22 +453,46 @@ def view_overview_gui():
         return
     
     st.write("# View Persistency Overview 👨‍💻")
+    st.markdown(""" 
+                Get an overview of all views with number of records, status, memory consumption
+                and disk size""")
     with st.container(width=2000, border=True, horizontal=True):     
         with st.spinner("Wait for it...", show_time=True):
-            df = view_overview.get_persisted_views()
-            st.dataframe(df, width="stretch")
+            st.session_state.df = view_overview.get_persisted_views()
+            if st.session_state.df.empty == "":
+                st.info("No persistency found", icon="ℹ️")
+            else:
+                st.dataframe(data=st.session_state.df, hide_index=True)           
+
+
 
 def taskchain_logs_gui():
     if check_session_state():
         return
     
     st.write("# Task Chain Logs 🔗")
+    st.markdown(""" 
+                Get all Task Chain logs with duration and status.""")    
     with st.container(width=2000, border=True):   
         st.session_state.dsp_space = selectbox_space()
         if st.button('Get Logs'):
             with st.spinner("Wait for it...", show_time=True):
-                df = taskchainlogs.get_log_information(st.session_state.dsp_space)
-                st.dataframe(df, width="stretch")
+                st.session_state.df = taskchainlogs.get_log_information(st.session_state.dsp_space)
+                if st.session_state.df.empty:
+                   st.info("No shares found.", icon="ℹ️")
+                   st.session_state.display = False
+                else:
+                   st.session_state.display = True
+
+    result = st.empty()
+    if st.session_state.display:
+        with result.container(width=2000, border=True):    
+            st.dataframe(data=st.session_state.df, hide_index=True,
+                         column_config={                      
+                            "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})  
+             
+            st.session_state.display = False
+
 
 def shares_per_space_gui():
    
@@ -574,6 +594,73 @@ def business_names_gui():
             df = business_name.get_business_and_technical_name(artifact)
             st.dataframe(data=df, hide_index=True)  
 
+def integration_monitor_gui():
+
+    if check_session_state():
+        return
+     
+    st.write("# Data Integration Monitor 🛫")
+             
+    st.markdown(""" 
+                Overview of all scheduled objects in the tenant.
+                
+                """)
+
+
+    tab1, tab2, tab3, tab4, tab5, tab6 , tab7 = st.tabs(["Task Chains", "Data Flows", "Views", "Transformation Flows", "Replication Flows", "Remote Tables", "Local Table"])
+
+
+    with st.spinner("Wait for it...", show_time=True):
+        df_task_chains = data_integration.monitor('TASK_CHAINS', 'taskChainMonitor')
+        df_data_flows = data_integration.monitor('DATA_FLOWS', 'dataFlowMonitor')
+        df_view = data_integration.monitor('VIEWS', 'viewMonitor')
+        df_transformation_flow = data_integration.monitor('TRANSFORMATION_FLOWS', 'transformationFlowMonitorDetails')
+        df_replication_flow = data_integration.monitor('REPLICATION_FLOWS', 'replicationFlowMonitorDetails')
+        df_remote_tables = data_integration.monitor('REMOTE_TABLES', 'remoteTableMonitor')
+        df_local_table = data_integration.monitor('LOCAL_TABLE_VARIANT', 'localTableMonitor')
+    
+    with tab1:
+        with st.container(width=2000, border=True):
+            st.dataframe(data=df_task_chains, hide_index=True,
+                        column_config={                      
+                            "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})
+            
+    
+    with tab2:
+        with st.container(width=2000, border=True):
+            st.dataframe(data=df_data_flows, hide_index=True,column_config={                      
+                            "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})          
+
+    with tab3:
+        with st.container(width=2000, border=True):
+            with st.spinner("Wait for it...", show_time=True):            
+                st.dataframe(data=df_view, hide_index=True,column_config={                      
+                                "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})          
+
+    with tab4:
+        with st.container(width=2000, border=True):
+            with st.spinner("Wait for it...", show_time=True):            
+                st.dataframe(data=df_transformation_flow, hide_index=True,column_config={                      
+                                "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})          
+
+    with tab5:
+        with st.container(width=2000, border=True):
+            with st.spinner("Wait for it...", show_time=True):
+                st.dataframe(data=df_replication_flow, hide_index=True,column_config={                      
+                                "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})          
+
+    with tab6:
+        with st.container(width=2000, border=True):
+            with st.spinner("Wait for it...", show_time=True):
+                st.dataframe(data=df_remote_tables, hide_index=True,column_config={                      
+                                "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})          
+        
+    with tab7:
+        with st.container(width=2000, border=True):
+            with st.spinner("Wait for it...", show_time=True):    
+                st.dataframe(data=df_local_table, hide_index=True,column_config={                      
+                                "Link": st.column_config.LinkColumn("Link", display_text="Open Link")})       
+
 pages = {
     "Home": [
         st.Page(intro, title="Start"),
@@ -582,27 +669,28 @@ pages = {
     "System": [
         st.Page(memory_usage_gui, title="Memory Usage", icon="🧠"),
         st.Page(system_monitor_gui, title="System Monitor", icon="💻"),
-        st.Page(notifications_gui, title="Notifications"),
-        st.Page(taskchain_logs_gui, title="TaskChain Logs"),
+        st.Page(notifications_gui, title="Notifications", icon="🔔"),
+        st.Page(taskchain_logs_gui, title="TaskChain Logs", icon="🔗"),
+        st.Page(integration_monitor_gui, title="Data Integration Monitor", icon="🛫")
 
     ],
     "Tools": [
         st.Page(taskchain_start_gui, title="Run TaskChain", icon="▶️"),
         st.Page(column_in_object_gui, title="Column in Object", icon="🤞"),
         st.Page(dac_per_user_gui, title="DataAccessControl per User"),
-        st.Page(business_names_gui, title="Get Business/Technical Name")
+        st.Page(business_names_gui, title="Get Business/Technical Name", icon="🥳")
     ],
     
     "HouseKeeping": [
         st.Page(orphaned_objects_gui, title="Orphaned Objects", icon="🚜"),
         st.Page(object_dependencies_gui, title="Find Object Dependencies", icon="📦"),
-        st.Page(unused_objects_gui, title="Unused Objects"),
-        st.Page(delete_mass_gui, title="Delete Objects"),
-        st.Page(view_overview_gui, title="View Persistency Overview")
+        st.Page(unused_objects_gui, title="Unused Objects", icon="🙈"),
+        st.Page(delete_mass_gui, title="Delete Objects", icon="🚮"),
+        st.Page(view_overview_gui, title="View Persistency Overview", icon="👨‍💻")
     ],
 
     "Administration": [
-        st.Page(taskchain_gui, title="Taskchain Objects"),
+        st.Page(taskchain_gui, title="Taskchain Objects", icon="🕵️‍♂️"),
         st.Page(exposed_views_gui, title="Exposed Views", icon="👀"),
 
         st.Page(database_tables_gui, title="Database Tables Size", icon="📚"),
